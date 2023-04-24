@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        #test,video {
+            display: inline-block;
+            width: 640px;
+            height: 480px;
+        }
+    </style>
+</head>
+
+<body>
+    <video></video>
+    <canvas id="test"></canvas>
+    <script defer src="https://unpkg.com/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+    <script type="module">
+        let canvasElement = document.querySelector("canvas")
+let width = canvasElement.width = canvasElement.clientWidth
+let height = canvasElement.height = canvasElement.clientHeight
+let canvasCtx = canvasElement.getContext("2d", { alpha: true })
+
+
+let video = document.querySelector("video")
+let stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true })
+video.srcObject = stream
+video.play()
+
+let results = undefined
+
+const selfieSegmentation = new SelfieSegmentation({
+    locateFile: (file) => { return `https://unpkg.com/@mediapipe/selfie_segmentation/` + file; }
+});
+
+selfieSegmentation.setOptions({ modelSelection: 0 });
+selfieSegmentation.onResults((r) => results = r);
+
+const image = new Image()
+image.src = "./caoyuan.jpeg"
+image.onload = () => {
+    const draw = async () => {
+        if (results !== undefined) {
+            canvasCtx.save();
+            canvasCtx.fillStyle = "rgba(255,255,255,0.1)"
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            
+            canvasCtx.drawImage(results.segmentationMask, 0, 0, canvasElement.width, canvasElement.height);
+
+            // Only overwrite existing pixels.
+            canvasCtx.globalCompositeOperation = 'source-in';
+            canvasCtx.fillStyle = '#00FF00';
+            canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            // Only overwrite missing pixels.
+            canvasCtx.globalCompositeOperation = 'destination-atop';
+            var newPattern = canvasCtx.createPattern(image, "no-repeat");
+            // let newPattern = "#ffffff"
+            canvasCtx.fillStyle = newPattern;
+            canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.restore();
+        }
+        await selfieSegmentation.send({ image: video })
+        requestAnimationFrame(draw)
+    }
+    draw()
+}
+
+    </script>
+
+</body>
+
+</html>

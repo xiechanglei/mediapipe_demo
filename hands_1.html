@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  video {
+    width: 50%;
+    display: none;
+  }
+
+  #drawContent {
+    width: 50%;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 200px;
+    font-weight: bold;
+    color: red;
+  }
+</style>
+
+<body>
+  <div class="container">
+    <video class="input_video"></video>
+    <div id="scaleContent"></div>
+    <div id="drawContent"></div>
+  </div>
+</body>
+<script type="module">
+  const videoElement = document.getElementsByClassName('input_video')[0];
+  const drawContent = document.getElementById('drawContent');
+  const scaleContent = document.getElementById('scaleContent');
+
+  //获取两个坐标点之间的距离
+  const getDistance = ({ x: x1, y: y1 }, { x: x2, y: y2 }) => {
+    return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
+  }
+
+  //获取landmarks某一个手指的顶点与三点到手掌根点之间的距离比例
+  const getLandmarkFingDistanceScale = (landmarks, fing) => {
+    let pointA = 4 * (fing + 1)
+    let pointB = pointA - 2
+    return getDistance(landmarks[pointA], landmarks[0]) / getDistance(landmarks[pointB], landmarks[0])
+  }
+
+  //各个手指伸直,弯曲,收起的比例值
+  const fingleCap = ["伸直", "收起"]
+  const fingleScalesLine = [[1.6], [1.3], [1.3], [1.3], [1.3]]
+
+  const handShape = {
+    "1": [fingleCap[1], fingleCap[0], fingleCap[1], fingleCap[1], fingleCap[1]],
+    "2": [fingleCap[1], fingleCap[0], fingleCap[0], fingleCap[1], fingleCap[1]],
+    "3": [fingleCap[1], fingleCap[0], fingleCap[0], fingleCap[0], fingleCap[1]],
+    "4": [fingleCap[1], fingleCap[0], fingleCap[0], fingleCap[0], fingleCap[0]],
+    "5": [fingleCap[0], fingleCap[0], fingleCap[0], fingleCap[0], fingleCap[0]],
+    "0": [fingleCap[1], fingleCap[1], fingleCap[1], fingleCap[1], fingleCap[1]],
+  }
+
+  function onResults(results) {
+    if (results.multiHandLandmarks) {
+      for (const landmarks of results.multiHandLandmarks) {
+        let fingleScales = new Array(5).fill(0).map((_, index) => getLandmarkFingDistanceScale(landmarks, index));
+        // scaleContent.innerHTML = `${fingleScales.join("<br/>")}`
+
+        fingleScales =  fingleScales.map((scale, index) => {
+          let sbIndex = fingleScalesLine[index].findIndex(fs => scale > fs)
+          return fingleCap[sbIndex] ?? fingleCap[fingleCap.length - 1]
+        })
+        let shapeFind = ""
+        console.log(fingleScales)
+        for (let shape in handShape) {
+          if (handShape[shape].every((s, index) => s === fingleScales[index])) {
+            shapeFind = shape
+          }
+        }
+        if(shapeFind!== "" && shapeFind!== drawContent.innerHTML){
+          drawContent.innerHTML = `<p>${shapeFind}</p>`
+        }
+      }
+    }
+  }
+
+  const hands = new Hands({
+    locateFile: (file) => {
+      return `https://unpkg.com/@mediapipe/hands/${file}`;
+    }
+  });
+  hands.setOptions({
+    maxNumHands: 2,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  });
+  hands.onResults(onResults);
+
+  const camera = new Camera(videoElement, {
+    onFrame: async () => {
+      await hands.send({ image: videoElement });
+    },
+    width: 1280,
+    height: 720
+  });
+  camera.start();
+</script>
+
+</html>
